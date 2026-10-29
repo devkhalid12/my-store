@@ -430,7 +430,7 @@ export default function Storefront() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-500">
-        © {new Date().getFullYear()} {settings.storeName}. All rights reserved.
+        © 2026 {settings.storeName}. All rights reserved.
       </footer>
     </div>
   );
