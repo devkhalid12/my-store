@@ -1,32 +1,29 @@
 "use client";
 
-import { useState, useEffect, useMemo, FormEvent } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/utils";
+import { useCart } from "@/context/CartContext";
 
-// 1. Data Type Definitions for TypeScript
+interface Variant {
+  _id?: string;
+  sku: string;
+  title: string;
+  priceInCents: number;
+  compareAtPriceInCents?: number;
+  stock: number;
+}
+
 interface Product {
   _id: string;
   title: string;
-  price: number;
-  category?: string;
-  imageUrl?: string;
-  stock?: number;
+  slug?: string;
   description: string;
-}
-
-interface CartItem {
-  productId: string;
-  title: string;
-  price: number;
+  category?: string;
+  images?: string[];
   imageUrl?: string;
-  quantity: number;
-}
-
-interface Customer {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
+  variants?: Variant[];
+  price?: number;
 }
 
 interface Settings {
@@ -37,23 +34,15 @@ interface Settings {
 }
 
 export default function Storefront() {
+  // Connect to the unified Global Cart
+  const { addToCart, openCart, totalItemsCount } = useCart();
+
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [submittingOrder, setSubmittingOrder] = useState<boolean>(false);
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-
-  // Customer form state
-  const [customer, setCustomer] = useState<Customer>({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-  });
 
   // Store Customization
   const [settings, setSettings] = useState<Settings>({
@@ -86,7 +75,22 @@ export default function Storefront() {
     loadStoreData();
   }, []);
 
-  // Dynamically extract unique categories
+  const getProductPriceInCents = (item: Product): number => {
+    if (item.variants && item.variants.length > 0) {
+      return item.variants[0].priceInCents;
+    }
+    if (typeof item.price === "number") {
+      return Math.round(item.price * 100);
+    }
+    return 0;
+  };
+
+  const getProductImage = (item: Product): string => {
+    if (item.images && item.images.length > 0) return item.images[0];
+    if (item.imageUrl) return item.imageUrl;
+    return "https://placehold.co/400x400?text=Product";
+  };
+
   const categories = useMemo<string[]>(() => {
     const unique = new Set(
       products.map((p) => p.category).filter((c): c is string => Boolean(c))
@@ -94,7 +98,6 @@ export default function Storefront() {
     return ["All", ...Array.from(unique)];
   }, [products]);
 
-  // Filtered products based on search term & category
   const filteredProducts = useMemo<Product[]>(() => {
     return products.filter((item) => {
       const matchesCategory =
@@ -107,67 +110,18 @@ export default function Storefront() {
     });
   }, [products, searchTerm, selectedCategory]);
 
-  // Cart Handlers
-  const addToCart = (product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product._id);
-      if (existing) {
-        return prev.map((item) =>
-          item.productId === product._id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [
-        ...prev,
-        {
-          productId: product._id,
-          title: product.title,
-          price: product.price,
-          imageUrl: product.imageUrl,
-          quantity: 1,
-        },
-      ];
+  // Handle Add to Cart from Homepage
+  const handleQuickAdd = (product: Product) => {
+    const defaultVariant = product.variants?.[0];
+    addToCart({
+      productId: product._id,
+      variantId: defaultVariant?._id,
+      title: product.title,
+      variantTitle: defaultVariant?.title || "Default",
+      priceInCents: getProductPriceInCents(product),
+      imageUrl: getProductImage(product),
+      quantity: 1,
     });
-    setIsCartOpen(true);
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.productId !== productId));
-  };
-
-  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Handle Order Placement
-  const handleCheckout = async (e: FormEvent) => {
-    e.preventDefault();
-    if (cart.length === 0) return alert("Your cart is empty!");
-
-    setSubmittingOrder(true);
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer,
-          items: cart,
-          totalAmount,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        alert("🎉 Order placed successfully! Thank you for your purchase.");
-        setCart([]);
-        setCustomer({ name: "", email: "", phone: "", address: "" });
-        setIsCartOpen(false);
-      } else {
-        alert(data.error || "Failed to place order.");
-      }
-    } catch (err) {
-      alert("Something went wrong!");
-    } finally {
-      setSubmittingOrder(false);
-    }
   };
 
   return (
@@ -194,8 +148,9 @@ export default function Storefront() {
               ⚙️ Admin Panel
             </Link>
 
+            {/* Global Cart Button */}
             <button
-              onClick={() => setIsCartOpen(true)}
+              onClick={openCart}
               className="relative flex items-center gap-1.5 text-gray-800 hover:text-black font-medium text-sm cursor-pointer"
             >
               <span className="text-xl">🛒</span>
@@ -266,167 +221,70 @@ export default function Storefront() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredProducts.map((item) => (
-                <div
-                  key={item._id}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
-                >
-                  <div className="relative aspect-square w-full bg-gray-100 overflow-hidden">
-                    <img
-                      src={item.imageUrl || "https://placehold.co/400x400?text=Product"}
-                      alt={item.title}
-                      className="w-full h-full object-cover hover:scale-105 transition duration-300"
-                    />
-                    <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-xs text-gray-800 text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded">
-                      {item.category}
-                    </span>
-                  </div>
+              {filteredProducts.map((item) => {
+                const priceInCents = getProductPriceInCents(item);
+                const displayImage = getProductImage(item);
+                const variantCount = item.variants?.length || 1;
+                const productLink = `/products/${item.slug || item._id}`;
 
-                  <div className="p-4 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-base line-clamp-1">
-                        {item.title}
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</p>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-                      <div>
-                        <span className="text-xs text-gray-400 block">Price</span>
-                        <span className="text-lg font-extrabold text-gray-900">
-                          ${item.price.toFixed(2)}
+                return (
+                  <div
+                    key={item._id}
+                    className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                  >
+                    <Link href={productLink} className="block group">
+                      <div className="relative aspect-square w-full bg-gray-100 overflow-hidden">
+                        <img
+                          src={displayImage}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        />
+                        <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-xs text-gray-800 text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded">
+                          {item.category || "General"}
                         </span>
+                        {variantCount > 1 && (
+                          <span className="absolute bottom-2 right-2 bg-black/75 text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
+                            {variantCount} variants
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <Link href={productLink}>
+                          <h3 className="font-semibold text-gray-900 text-base line-clamp-1 hover:underline hover:text-indigo-600 transition">
+                            {item.title}
+                          </h3>
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                          {item.description}
+                        </p>
                       </div>
 
-                      <button
-                        onClick={() => addToCart(item)}
-                        className="bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer"
-                      >
-                        + Add to Cart
-                      </button>
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-xs text-gray-400 block">Price</span>
+                          <span className="text-lg font-extrabold text-gray-900">
+                            {formatCurrency(priceInCents)}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleQuickAdd(item)}
+                          className="bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer"
+                        >
+                          + Add to Cart
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </main>
-
-      {/* Cart Drawer & Checkout */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div
-            onClick={() => setIsCartOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition"
-          />
-
-          <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">Your Shopping Cart</h2>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="p-6 overflow-y-auto flex-1 space-y-4">
-                {cart.length === 0 ? (
-                  <p className="text-center text-sm text-gray-500 py-12">Your cart is empty.</p>
-                ) : (
-                  cart.map((item) => (
-                    <div
-                      key={item.productId}
-                      className="flex items-center justify-between border-b border-gray-100 pb-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={item.imageUrl || "https://placehold.co/60x60"}
-                          alt={item.title}
-                          className="w-12 h-12 object-cover rounded border"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{item.title}</p>
-                          <p className="text-xs text-gray-500">
-                            ${item.price} × {item.quantity}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item.productId)}
-                        className="text-xs text-red-500 hover:underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))
-                )}
-
-                {cart.length > 0 && (
-                  <form onSubmit={handleCheckout} id="checkout-form" className="pt-4 space-y-3">
-                    <h3 className="font-semibold text-gray-900 text-sm border-t border-gray-200 pt-3">
-                      Shipping & Delivery Details
-                    </h3>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Full Name *"
-                      value={customer.name}
-                      onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
-                    />
-                    <input
-                      required
-                      type="email"
-                      placeholder="Email Address *"
-                      value={customer.email}
-                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
-                    />
-                    <input
-                      required
-                      type="tel"
-                      placeholder="Phone Number *"
-                      value={customer.phone}
-                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
-                    />
-                    <textarea
-                      required
-                      rows={2}
-                      placeholder="Delivery Address *"
-                      value={customer.address}
-                      onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
-                    ></textarea>
-                  </form>
-                )}
-              </div>
-
-              {cart.length > 0 && (
-                <div className="p-6 border-t border-gray-200 bg-gray-50 space-y-4">
-                  <div className="flex justify-between text-base font-bold text-gray-900">
-                    <span>Total:</span>
-                    <span>${totalAmount.toFixed(2)}</span>
-                  </div>
-
-                  <button
-                    type="submit"
-                    form="checkout-form"
-                    disabled={submittingOrder}
-                    className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 rounded-lg text-sm transition disabled:bg-gray-400 cursor-pointer"
-                  >
-                    {submittingOrder ? "Placing Order..." : `Place Order ($${totalAmount.toFixed(2)})`}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-500">

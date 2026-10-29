@@ -130,6 +130,12 @@ export default function AdminLayout({ children }) {
               📦 Products
             </Link>
             <Link
+  href="/admin/discounts"
+  className="flex items-center px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 hover:text-white transition"
+>
+  🏷️ Discounts
+</Link>
+            <Link
               href="/admin/orders"
               className="flex items-center px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 hover:text-white transition"
             >
