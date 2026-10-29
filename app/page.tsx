@@ -1,21 +1,54 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, FormEvent } from "react";
 import Link from "next/link";
 
+// 1. Data Type Definitions for TypeScript
+interface Product {
+  _id: string;
+  title: string;
+  price: number;
+  category?: string;
+  imageUrl?: string;
+  stock?: number;
+  description: string;
+}
+
+interface CartItem {
+  productId: string;
+  title: string;
+  price: number;
+  imageUrl?: string;
+  quantity: number;
+}
+
+interface Customer {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+}
+
+interface Settings {
+  storeName: string;
+  announcementText: string;
+  heroTitle: string;
+  heroSubtitle: string;
+}
+
 export default function Storefront() {
-  const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submittingOrder, setSubmittingOrder] = useState<boolean>(false);
 
   // Search & Filter State
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   // Customer form state
-  const [customer, setCustomer] = useState({
+  const [customer, setCustomer] = useState<Customer>({
     name: "",
     email: "",
     phone: "",
@@ -23,7 +56,7 @@ export default function Storefront() {
   });
 
   // Store Customization
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<Settings>({
     storeName: "MYSTORE",
     announcementText: "🚀 Free shipping on all orders over $50!",
     heroTitle: "Discover Our Latest Collection",
@@ -53,14 +86,16 @@ export default function Storefront() {
     loadStoreData();
   }, []);
 
-  // Dynamically extract unique categories from products
-  const categories = useMemo(() => {
-    const unique = new Set(products.map((p) => p.category).filter(Boolean));
+  // Dynamically extract unique categories
+  const categories = useMemo<string[]>(() => {
+    const unique = new Set(
+      products.map((p) => p.category).filter((c): c is string => Boolean(c))
+    );
     return ["All", ...Array.from(unique)];
   }, [products]);
 
-  // Filtered products based on search term & selected category
-  const filteredProducts = useMemo(() => {
+  // Filtered products based on search term & category
+  const filteredProducts = useMemo<Product[]>(() => {
     return products.filter((item) => {
       const matchesCategory =
         selectedCategory === "All" ||
@@ -73,7 +108,7 @@ export default function Storefront() {
   }, [products, searchTerm, selectedCategory]);
 
   // Cart Handlers
-  const addToCart = (product) => {
+  const addToCart = (product: Product) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product._id);
       if (existing) {
@@ -95,7 +130,7 @@ export default function Storefront() {
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (productId) => {
+  const removeFromCart = (productId: string) => {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   };
 
@@ -103,7 +138,7 @@ export default function Storefront() {
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Handle Order Placement
-  const handleCheckout = async (e) => {
+  const handleCheckout = async (e: FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return alert("Your cart is empty!");
 
@@ -161,7 +196,7 @@ export default function Storefront() {
 
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative flex items-center gap-1.5 text-gray-800 hover:text-black font-medium text-sm"
+              className="relative flex items-center gap-1.5 text-gray-800 hover:text-black font-medium text-sm cursor-pointer"
             >
               <span className="text-xl">🛒</span>
               <span>Cart</span>
@@ -185,11 +220,10 @@ export default function Storefront() {
         </div>
       </section>
 
-      {/* Main Catalog with Search & Filter Controls */}
+      {/* Main Catalog */}
       <main className="max-w-7xl mx-auto px-6 py-12 flex-1 w-full space-y-8">
         {/* Search & Category Filter Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
-          {/* Instant Search Bar */}
           <div className="relative w-full md:w-80">
             <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">🔍</span>
             <input
@@ -197,17 +231,16 @@ export default function Storefront() {
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-black"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:ring-2 focus:ring-black"
             />
           </div>
 
-          {/* Category Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition whitespace-nowrap ${
+                className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition whitespace-nowrap cursor-pointer ${
                   selectedCategory === cat
                     ? "bg-black text-white"
                     : "bg-gray-100 hover:bg-gray-200 text-gray-700"
@@ -267,7 +300,7 @@ export default function Storefront() {
 
                       <button
                         onClick={() => addToCart(item)}
-                        className="bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+                        className="bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer"
                       >
                         + Add to Cart
                       </button>
@@ -294,7 +327,7 @@ export default function Storefront() {
                 <h2 className="text-lg font-bold text-gray-900">Your Shopping Cart</h2>
                 <button
                   onClick={() => setIsCartOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold cursor-pointer"
                 >
                   ✕
                 </button>
@@ -324,7 +357,7 @@ export default function Storefront() {
                       </div>
                       <button
                         onClick={() => removeFromCart(item.productId)}
-                        className="text-xs text-red-500 hover:underline"
+                        className="text-xs text-red-500 hover:underline cursor-pointer"
                       >
                         Remove
                       </button>
@@ -343,7 +376,7 @@ export default function Storefront() {
                       placeholder="Full Name *"
                       value={customer.name}
                       onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs outline-none focus:border-black"
+                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
                     />
                     <input
                       required
@@ -351,7 +384,7 @@ export default function Storefront() {
                       placeholder="Email Address *"
                       value={customer.email}
                       onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs outline-none focus:border-black"
+                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
                     />
                     <input
                       required
@@ -359,15 +392,15 @@ export default function Storefront() {
                       placeholder="Phone Number *"
                       value={customer.phone}
                       onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs outline-none focus:border-black"
+                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
                     />
                     <textarea
                       required
-                      rows="2"
+                      rows={2}
                       placeholder="Delivery Address *"
                       value={customer.address}
                       onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                      className="w-full border rounded-lg p-2 text-xs outline-none focus:border-black"
+                      className="w-full border rounded-lg p-2 text-xs text-gray-900 bg-white outline-none focus:border-black"
                     ></textarea>
                   </form>
                 )}
@@ -384,7 +417,7 @@ export default function Storefront() {
                     type="submit"
                     form="checkout-form"
                     disabled={submittingOrder}
-                    className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 rounded-lg text-sm transition disabled:bg-gray-400"
+                    className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 rounded-lg text-sm transition disabled:bg-gray-400 cursor-pointer"
                   >
                     {submittingOrder ? "Placing Order..." : `Place Order ($${totalAmount.toFixed(2)})`}
                   </button>
